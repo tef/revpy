@@ -72,12 +72,14 @@ class Reverser(object):
         stack = []
         while i < self.n:
             print "stack", stack
+            print "out", python
             i,out = self.reverse_one(stack, i, terminator="STOP_CODE")
             if out == terminator:
                 break
+            print "out", out
             python.extend(out)
-            
-        python.extend(stack)
+        print "end", stack 
+        python.extend(reversed(stack))
         return python
         
     def reverse_one(self,stack, i, terminator):
@@ -113,9 +115,7 @@ class Reverser(object):
                 if self.free is None:
                     self.free = self.co.co_cellvars + self.co.co_freevars
                 arg =  self.free[oparg]
-        if name.startswith("LOAD_"):
-            stack.append(arg)
-        elif name.startswith("INPLACE_"):
+        if name.startswith("INPLACE_"):
             one = stack.pop()
             two = stack.pop()
             name = name.lower()
@@ -128,19 +128,50 @@ class Reverser(object):
             one = stack.pop()
             two = stack.pop()
             name = name[(name.find("_")+1):].lower()
-            stack.append(build(name,[one,two]))
-        elif name == "RETURN_VALUE":
+            stack.append(build(name,[two,one]))
+        elif name.find("ATTR") > 0:
             one = stack.pop()
-            python.append(build("return",[one]))
-        elif name.startswith("STORE"):
+            stack.append(build("attr",[one,arg]))
+        elif name.find("SUBSCR") > 0:
             one = stack.pop()
-            python.append(build("set",[arg,one]))
-        elif name == terminator:
+            two = stack.pop()
+            stack.append(build("subscr",[two,one]))
+        elif name.find("SLICE") > 0:
+            n = int(name[-1])
+            one = stack.pop()
+            if n == 0:
+                stack.append(build("sliceall",[one]))
+            else:
+                two = stack.pop()
+                if n == 1:
+                    stack.append(build("sliceleft",[two,one]))
+                elif n == 2:
+                    stack.append(build("sliceright",[two,one]))
+                else:
+                    three = stack.pop()
+                stack.append(build("slice",[three,two,one]))
+        elif name.startswith("LOAD_"):
+            stack.append(arg)
+                
+        if name == terminator:
             return i,name
+        elif name == "RETURN_VALUE" or name == "YIELD_VALUE":
+            one = stack.pop()
+            python.append(build(name[:name.find("_")].lower(),[one]))
         elif name == "NOP":
             pass
+        elif name == "BUILD_LIST":
+            n = int(oparg)
+            args = []
+            while n > 0:
+                args.append(stack.pop())
+                n-=1
+            args.reverse()
+            stack.append(build("list",args))
+
         elif name == "POP_TOP":
-            stack.pop()
+            one = stack.pop()
+            python.append(one)
         elif name == "DUP_TOP":
             stack.append(stack[-1])
         elif name == "ROT_TWO":
@@ -164,8 +195,17 @@ class Reverser(object):
             stack.append(four)
             stack.append(three)
             stack.append(two)
-        else:
-            print name
+        elif name.startswith("STORE"):
+            func = name[(name.find("_")+1):].lower()
+            one = arg if func in ['global','fast','name']  else stack.pop()
+            two = stack.pop()
+            python.append(build("set",[one,two]))
+        elif name.startswith("DELETE"):
+            func = name[(name.find("_")+1):].lower()
+            one = arg if func in ['global','fast','name']  else stack.pop()
+            python.append(build("del",[one]))
+        print name
+                
         return i,python
 
 
