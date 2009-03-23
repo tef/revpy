@@ -12,7 +12,7 @@ build_class
 withcleanup
 
 except/finally/raise_vargargs
-call_function/make_closure
+/make_closure
 build_slice
 from opcode import *
 """
@@ -294,6 +294,14 @@ class Reverser(object):
         elif name.endswith("LOOP"):
             func = name[:name.find("_")].lower()
             python.append(build(func,[]))
+        elif name == "RAISE_VARARGS":
+            args = []
+            low = oparg
+            while low > 0:
+                a=stack.pop()
+                args.append(a)
+                low-=1
+            python.append(build("raise",args[0:2]))
         elif name.startswith("CALL_FUNCTION"):
             kkargs = stack.pop() if name.find("_KW") > 0 else {}
             ppargs = stack.pop() if name.find("_VAR") > 0 else []
