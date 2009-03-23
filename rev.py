@@ -12,7 +12,7 @@ build_class
 withcleanup
 
 except/finally/raise_vargargs
-/make_closure
+/ake_closure
 build_slice
 from opcode import *
 """
@@ -245,7 +245,10 @@ class Reverser(object):
                 python.append(build("if",args))  
             else:
                 python.append(build("if",[cond,if_branch,else_branch]))  
-        elif name.startswith("BUILD_"):
+        elif name.startswith("MAKE_"):
+            code = stack.pop()
+            if name.find("CLOSURE"):
+                stack.pop()
             n = int(oparg)
             args = []
             while n > 0:
@@ -253,7 +256,7 @@ class Reverser(object):
                 n-=1
             args.reverse()
             v = "__s"+str(random.randint(0,1024))
-            python.append(build("set",[v,build(name.lower(),args)]))
+            python.append(build("set",[v,build("fun",[args,code])]))
             stack.append(v)
 
         elif name == "POP_TOP":
