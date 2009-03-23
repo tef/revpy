@@ -109,22 +109,25 @@ class Reverser(object):
             oparg = ord(self.code[i]) + ord(self.code[i+1])*256 + extended_arg
             extended_arg = 0
             i = i+2
+            arg = None
             if op == EXTENDED_ARG:
                 extended_arg = oparg*65536L
             if op in hasconst:
-                arg = self.co.co_consts[oparg] 
+                arg =  self.co.co_consts[oparg]
             elif op in hasname:
-                arg = ('var',self.co.co_names[oparg])
+                arg = self.co.co_names[oparg]
             elif op in hasjrel:
                 arg = i + oparg
             elif op in haslocal:
-                arg = ('var',self.co.co_varnames[oparg])
+                arg = self.co.co_varnames[oparg]
             elif op in hascompare:
                 arg =  cmp_op[oparg]
             elif op in hasfree:
                 if self.free is None:
                     self.free = self.co.co_cellvars + self.co.co_freevars
                 arg =  self.free[oparg]
+            if arg and isinstance(arg,tuple):
+                arg = tuple(['tuple'].append(arg))
         if name.startswith("INPLACE_"):
             one = stack.pop()
             two = stack.pop()
@@ -212,7 +215,13 @@ class Reverser(object):
                     new_expr = True
             if jmp != i or len(stack) > 0:
                 raise Exception, "fuck"
-            python.append(build(name[name.find("_")+1:].lower(),[cond,if_branch,else_branch]))  
+            if  name[8:] == "FALSE":
+                if_branch, else_branch = else_branch, if_branch
+            if len(else_branch) == 1 and isinstance(else_branch[0], tuple) and else_branch[0][0] == "if":
+                args = [cond, if_branch].append(else_branch[0][1:])
+                python.append(build("if",args))  
+            else:
+                python.append(build("if",[cond,if_branch,else_branch]))  
         elif name.startswith("BUILD_"):
             n = int(oparg)
             args = []
