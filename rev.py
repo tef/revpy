@@ -294,9 +294,10 @@ class Reverser(object):
         elif name.endswith("LOOP"):
             func = name[:name.find("_")].lower()
             python.append(build(func,[]))
-        elif name == "CALL_FUNCTION":
+        elif name.startswith("CALL_FUNCTION"):
+            kkargs = stack.pop() if name.find("_KW") > 0 else {}
+            ppargs = stack.pop() if name.find("_VAR") > 0 else []
             low, high = oparg & 255, oparg >> 8
-            print low, high
             pargs = []
             while low > 0:
                 a=stack.pop()
@@ -312,7 +313,7 @@ class Reverser(object):
             func = stack.pop()
             v = "__s"+str(random.randint(0,1024))
             stack.append(v)
-            python.append(build('set',[v,('call',func,pargs,kargs)]))
+            python.append(build('set',[v,('call',func,pargs,kargs,ppargs,kkargs)]))
         elif name == "UNPACK_SEQUENCE":
             one = stack.pop()
             args = []
