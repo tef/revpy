@@ -81,16 +81,13 @@ class Reverser(object):
     def reverse(self, i=0, terminator = "STOP_CODE"):
         python = []
         stack = []
+        new_expr=True
         while i < self.n:
-            #print "stack", stack
-            #print "out", python
             if (i in self.linestarts):
                 new_expr = False
-
             i,out = self.reverse_one(stack, i, terminator="STOP_CODE")
             if out == terminator:
                 break
-            #print "out", out
             add_expr(new_expr,python,out)
             if out:
                 new_expr = True
@@ -115,13 +112,13 @@ class Reverser(object):
             if op == EXTENDED_ARG:
                 extended_arg = oparg*65536L
             if op in hasconst:
-                arg = repr(self.co.co_consts[oparg]) 
+                arg = self.co.co_consts[oparg] 
             elif op in hasname:
-                arg = self.co.co_names[oparg]
+                arg = ('var',self.co.co_names[oparg])
             elif op in hasjrel:
-                arg = repr(i + oparg)
+                arg = i + oparg
             elif op in haslocal:
-                arg = self.co.co_varnames[oparg]
+                arg = ('var',self.co.co_varnames[oparg])
             elif op in hascompare:
                 arg =  cmp_op[oparg]
             elif op in hasfree:
@@ -137,6 +134,10 @@ class Reverser(object):
             one = stack.pop()
             name = name[(name.find("_")+1):].lower()
             stack.append(build(name,[one]))
+        elif name == "COMPARE_OP":
+            one = stack.pop()
+            two = stack.pop()
+            stack.append(build(arg,[two,one]))
         elif name.startswith("BINARY_"):
             one = stack.pop()
             two = stack.pop()
@@ -173,6 +174,45 @@ class Reverser(object):
             python.append(build(name[:name.find("_")].lower(),[one]))
         elif name == "NOP":
             pass
+        elif name == "JUMP_FORWARD":
+            i = i+ int(oparg)
+        elif name == "JUMP_ABSOLUTE":
+            i = int(oparg)
+        elif name.startswith("JUMP"): # must be an if statement
+            i+=1
+            jmp = i + int(oparg) 
+            if jmp <  i:
+                raise Exception, "fuck"
+            if_branch = []
+            new_expr = True
+            cond = stack.pop()
+            oldstack = stack[:]
+            print "foo",oldstack
+            
+            while i < jmp:
+                if (i in self.linestarts):
+                    new_expr = False
+                i,out = self.reverse_one(stack, i, terminator="")
+                if out == terminator:
+                    break
+                add_expr(new_expr,if_branch,out)
+                if out:
+                    new_expr = True
+            else_branch = []
+            new_expr = True
+            stack = oldstack
+            while jmp < i:
+                if (jmp in self.linestarts):
+                    new_expr = False
+                jmp,out = self.reverse_one(stack, jmp, terminator="")
+                if out == terminator:
+                    break
+                add_expr(new_expr,else_branch,out)
+                if out:
+                    new_expr = True
+            if jmp != i or len(stack) > 0:
+                raise Exception, "fuck"
+            python.append(build(name[name.find("_")+1:].lower(),[cond,if_branch,else_branch]))  
         elif name.startswith("BUILD_"):
             n = int(oparg)
             args = []
@@ -186,7 +226,7 @@ class Reverser(object):
 
         elif name == "POP_TOP":
             one = stack.pop()
-            python.append(one)
+            #python.append(one)
         elif name == "DUP_TOP":
             stack.append(stack[-1])
         elif name == "ROT_TWO":
