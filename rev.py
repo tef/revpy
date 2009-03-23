@@ -47,65 +47,127 @@ def reverse_class(x):
                     print "Sorry:", msg
                 print
 
+def build(name, args):
+    t = [name]
+    t.extend(args)
+    return tuple(t)
+
 def reverse(co, lasti=-1):
     r = Reverser(co, lasti)
-    return r.rev()
-
-
+    return r.reverse()
+    
 
 class Reverser(object):
-
     def __init__(self, co, lasti=-1):
+        self.co = co
         self.code = co.co_code
         self.labels = findlabels(self.code)
         self.linestarts = dict(findlinestarts(co))
         self.n = len(self.code)
+        self.free = None
         self.lasti = lasti
-        self.co = co
 
-    def rev(self):
-        i = 0
-        extended_arg = 0
-        free = None
+    def reverse(self, i=0, terminator = "STOP_CODE"):
+        python = []
+        stack = []
         while i < self.n:
-            c = self.code[i]
-            op = ord(c)
-            if i in self.linestarts:
-                if i > 0:
-                    print
-                print "%3d" % self.linestarts[i],
-            else:
-                print '   ',
+            print "stack", stack
+            i,out = self.reverse_one(stack, i, terminator="STOP_CODE")
+            if out == terminator:
+                break
+            python.extend(out)
+            
+        python.extend(stack)
+        return python
+        
+    def reverse_one(self,stack, i, terminator):
+        python = []
+        extended_arg = 0
+        c = self.code[i]
+        op = ord(c)
+        if (i in self.linestarts) and stack:
+            expr = stack.pop()
+            python.append(expr)                 
 
-            if i == self.lasti: print '-->',
-            else: print '   ',
-            if i in self.labels: print '>>',
-            else: print '  ',
-            print repr(i).rjust(4),
-            print opname[op].ljust(20),
-            i = i+1
-            if op >= HAVE_ARGUMENT:
-                oparg = ord(self.code[i]) + ord(self.code[i+1])*256 + extended_arg
-                extended_arg = 0
-                i = i+2
-                if op == EXTENDED_ARG:
-                    extended_arg = oparg*65536L
-                print repr(oparg).rjust(5),
-                if op in hasconst:
-                    print '(' + repr(self.co.co_consts[oparg]) + ')',
-                elif op in hasname:
-                    print '(' + self.co.co_names[oparg] + ')',
-                elif op in hasjrel:
-                    print '(to ' + repr(i + oparg) + ')',
-                elif op in haslocal:
-                    print '(' + self.co.co_varnames[oparg] + ')',
-                elif op in hascompare:
-                    print '(' + cmp_op[oparg] + ')',
-                elif op in hasfree:
-                    if free is None:
-                        free = co.co_cellvars + co.co_freevars
-                    print '(' + free[oparg] + ')',
-            print
+        if i == self.lasti: 
+            python.append("# Current Line")
+        i+=1
+        name = opname[op]
+        if op >= HAVE_ARGUMENT:
+            oparg = ord(self.code[i]) + ord(self.code[i+1])*256 + extended_arg
+            extended_arg = 0
+            i = i+2
+            if op == EXTENDED_ARG:
+                extended_arg = oparg*65536L
+            if op in hasconst:
+                arg = repr(self.co.co_consts[oparg]) 
+            elif op in hasname:
+                arg = self.co.co_names[oparg]
+            elif op in hasjrel:
+                arg = repr(i + oparg)
+            elif op in haslocal:
+                arg = self.co.co_varnames[oparg]
+            elif op in hascompare:
+                arg =  cmp_op[oparg]
+            elif op in hasfree:
+                if self.free is None:
+                    self.free = self.co.co_cellvars + self.co.co_freevars
+                arg =  self.free[oparg]
+        if name.startswith("LOAD_"):
+            stack.append(arg)
+        elif name.startswith("INPLACE_"):
+            one = stack.pop()
+            two = stack.pop()
+            name = name.lower()
+            stack.append(build(name,[two,one]))
+        elif name.startswith("UNARY_"):
+            one = stack.pop()
+            name = name[(name.find("_")+1):].lower()
+            stack.append(build(name,[one]))
+        elif name.startswith("BINARY_"):
+            one = stack.pop()
+            two = stack.pop()
+            name = name[(name.find("_")+1):].lower()
+            stack.append(build(name,[one,two]))
+        elif name == "RETURN_VALUE":
+            one = stack.pop()
+            python.append(build("return",[one]))
+        elif name.startswith("STORE"):
+            one = stack.pop()
+            python.append(build("set",[arg,one]))
+        elif name == terminator:
+            return i,name
+        elif name == "NOP":
+            pass
+        elif name == "POP_TOP":
+            stack.pop()
+        elif name == "DUP_TOP":
+            stack.append(stack[-1])
+        elif name == "ROT_TWO":
+            one = stack.pop()
+            two = stack.pop()
+            stack.append(one)
+            stack.append(two)
+        elif name == "ROT_THREE":
+            one = stack.pop()
+            two = stack.pop()
+            three = stack.pop()
+            stack.append(one)
+            stack.append(three)
+            stack.append(two)
+        elif name == "ROT_FOUR":
+            one = stack.pop()
+            two = stack.pop()
+            three = stack.pop()
+            four = stack.pop()
+            stack.append(one)
+            stack.append(four)
+            stack.append(three)
+            stack.append(two)
+        else:
+            print name
+        return i,python
+
 
 def reversee_string(code, lasti=-1, varnames=None, names=None,
                        constants=None):
