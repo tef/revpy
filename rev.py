@@ -152,49 +152,46 @@ class Reverser(object):
         elif name == "NOP":
             pass
         elif name == "SETUP_LOOP":
-            end = i + int(oparg) -2
+            end = i + int(oparg) 
             start = i
             body = []
             cond = True
+            wloop = True
             new_expr = True
             #print "loop", i, end
             while  i < end:
                 if (i in self.linestarts):
                     new_expr = False
-                i,out = self.reverse_one(body,i,terminator="JUMP_")
-                #print "l:",cond,body
-                #print "e:", out
-                #print i
-                if isinstance(out,str) and out.startswith("JUMP_"):
-                    n,name, arg, oparg = self.instr(i-3)
-                    #print name, oparg,n
-                    if name.find("IF") > 0 and oparg + n == end:
+                n,name, arg, oparg = self.instr(i)
+                if name.startswith("JUMP_") and name.find("IF") > 0 and oparg + n == (end-2):
                             #print "exit found", body
+                            if len(body) > 1:
+                                raise Exception, "Fuck"
                             cond = body[0]
                             body = []
                             #print "ijmp",n
                             i = n+1
-                            if len(body) > 1:
-                                raise Exception, "Fuck"
                             if name.find("TRUE") > 0:
                                 cond = ('not', cond)
-                    else:
-                        #print "normal, resuming at ",(i-3)
-                        #print "body", body
-                        i, out = self.reverse_one(body,i-3, terminator="STOP_CODE")
-                        #print "new i",i
+                elif name == "FOR_ITER" and oparg + n == (end-1):
+                            if len(body) > 1:
+                                raise Exception, "Fuck"
+                            wloop=False
+                            #print "exit found", body
+                            v = "__s"+str(random.randint(0,1024))
+                            cond = build("set",[v,body[0]])
+                            body = [v]
+                            start = i
+                            i = n
+                else:
+                        i,out = self.reverse_one(body,i,terminator="STOP_CODE")
                         add_expr(new_expr,body,out)
                         if out:
                             new_expr = True
-                else:    
-                    add_expr(new_expr,body,out)
-                    if out:
-                        new_expr = True
                 if i == start:
                     i = end + 2
                     break;
-            
-            python.append(build("while",[cond, body]))
+            python.append(build("while" if wloop else "for",[cond, body]))
                 
         elif name == "JUMP_FORWARD":
             i = i+ int(oparg)
@@ -296,6 +293,7 @@ class Reverser(object):
         return i,python
 
     def instr(self, i):
+        print i
         extended_arg = 0
         c = self.code[i]
         op = ord(c)
