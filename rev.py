@@ -1,5 +1,6 @@
 import sys
 import types
+import random
 
 from opcode import *
 
@@ -49,7 +50,8 @@ def reverse_class(x):
 
 def build(name, args):
     t = [name]
-    t.extend(args)
+    if args:
+        t.extend(args)
     return tuple(t)
 
 def reverse(co, lasti=-1):
@@ -130,7 +132,7 @@ class Reverser(object):
             one = stack.pop()
             two = stack.pop()
             name = name.lower()
-            stack.append(build(name,[two,one]))
+            python.append(build(name,[two,one]))
         elif name.startswith("UNARY_") or name == "GET_ITER":
             one = stack.pop()
             name = name[(name.find("_")+1):].lower()
@@ -178,7 +180,9 @@ class Reverser(object):
                 args.append(stack.pop())
                 n-=1
             args.reverse()
-            stack.append(build(name[name.find("_")+1:].lower(),args))
+            v = "__s"+str(random.randint(0,1024))
+            python.append(build("set",[v,build(name.lower(),args)]))
+            stack.append(v)
 
         elif name == "POP_TOP":
             one = stack.pop()
@@ -205,7 +209,11 @@ class Reverser(object):
             stack.append(one)
             stack.append(four)
             stack.append(three)
-            stack.append(two)
+        elif name == "EXEC_STMT":
+            one = stack.pop() if len(stack) > 2 else None
+            two = stack.pop() if len(stack) > 1 else None
+            three = stack.pop()
+            python.append(build("exec",(three,two,one)))
         elif name.startswith("STORE"):
             func = name[(name.find("_")+1):].lower()
             one = arg if func in ['global','fast','name']  else stack.pop()
@@ -216,6 +224,8 @@ class Reverser(object):
             one = arg if func in ['global','fast','name']  else stack.pop()
             python.append(build("del",[one]))
         elif name.startswith("PRINT"):
+            if name.endswith("TO"):
+                raise Exception,"fuck"
             one = [[name[name.find("_")+1:].lower(),stack.pop()]] if name != "PRINT_NEWLINE" else [["newline"]]
             python.append(build("print",one))
         print name
