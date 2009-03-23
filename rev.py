@@ -2,8 +2,20 @@ import sys
 import types
 import random
 
-from opcode import *
 
+""" python decompiler
+todo: print_item_to
+list_append
+load_locals
+import* import name import from
+build_class
+withcleanup
+
+except/finally/raise_vargargs
+call_function/make_closure
+build_slice
+from opcode import *
+"""
 def rev(x=None):
     if x is None:
         x = get_trackback()
@@ -72,7 +84,6 @@ class Reverser(object):
     def __init__(self, co, lasti=-1):
         self.co = co
         self.code = co.co_code
-        self.labels = findlabels(self.code)
         self.linestarts = dict(findlinestarts(co))
         self.n = len(self.code)
         self.free = None
@@ -348,6 +359,13 @@ class Reverser(object):
         return i,name, arg, oparg
 
 
+operators = {
+    'add':'+',
+    'attr':'.',
+}
+def ast_to_code(tree):
+    if tree[0] in operators:
+        pass
 def reversee_string(code, lasti=-1, varnames=None, names=None,
                        constants=None):
     labels = findlabels(code)
