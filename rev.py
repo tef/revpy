@@ -280,6 +280,27 @@ class Reverser(object):
             one = arg if func in ['global','fast','name']  else stack.pop()
             two = stack.pop()
             python.append(build("set",[one,two]))
+        elif name.endswith("LOOP"):
+            func = name[:name.find("_")].lower()
+            python.append(build(func,[]))
+        elif name == "UNPACK_SEQUENCE":
+            one = stack.pop()
+            args = []
+            n = oparg
+            while n > 0:
+                v = "__s"+str(random.randint(0,1024))
+                stack.append(v)
+                args.append(v)
+                n-=1
+            args.reverse()
+            python.append(build("set",[args,one]))
+        elif name == "DUP_TOPX":
+            newstack = []
+            n = oparg
+            while n > 0:
+                a = stack.pop()
+                newstack.extend([a,a])
+            stack.extend(newstack)
         elif name.startswith("DELETE"):
             func = name[(name.find("_")+1):].lower()
             one = arg if func in ['global','fast','name']  else stack.pop()
