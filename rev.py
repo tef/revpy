@@ -56,6 +56,15 @@ def reverse(co, lasti=-1):
     r = Reverser(co, lasti)
     return r.reverse()
     
+def add_expr(new_expr,python, out):
+    print new_expr, out
+    if new_expr and len(out) == 1 and isinstance(out[0],tuple) and  out[0][0].startswith("print"):
+        if len(python) > 0 and isinstance(python[-1],tuple) and python[-1][0].startswith("print"):
+            one = python.pop()
+            args = list(one[1:])
+            args.extend(out[0][1:])
+            out = [build("print", args)]
+    python.extend(out)
 
 class Reverser(object):
     def __init__(self, co, lasti=-1):
@@ -71,15 +80,21 @@ class Reverser(object):
         python = []
         stack = []
         while i < self.n:
-            print "stack", stack
-            print "out", python
+            #print "stack", stack
+            #print "out", python
+            if (i in self.linestarts):
+                new_expr = False
+
             i,out = self.reverse_one(stack, i, terminator="STOP_CODE")
             if out == terminator:
                 break
-            print "out", out
-            python.extend(out)
-        print "end", stack 
-        python.extend(reversed(stack))
+            #print "out", out
+            add_expr(new_expr,python,out)
+            if out:
+                new_expr = True
+        #print "end", stack 
+        for i in reversed(stack):
+            add_expr(True,python,i)
         return python
         
     def reverse_one(self,stack, i, terminator):
@@ -87,10 +102,6 @@ class Reverser(object):
         extended_arg = 0
         c = self.code[i]
         op = ord(c)
-        if (i in self.linestarts) and stack:
-            expr = stack.pop()
-            python.append(expr)                 
-
         if i == self.lasti: 
             python.append("# Current Line")
         i+=1
@@ -120,7 +131,7 @@ class Reverser(object):
             two = stack.pop()
             name = name.lower()
             stack.append(build(name,[two,one]))
-        elif name.startswith("UNARY_"):
+        elif name.startswith("UNARY_") or name == "GET_ITER":
             one = stack.pop()
             name = name[(name.find("_")+1):].lower()
             stack.append(build(name,[one]))
@@ -160,14 +171,14 @@ class Reverser(object):
             python.append(build(name[:name.find("_")].lower(),[one]))
         elif name == "NOP":
             pass
-        elif name == "BUILD_LIST":
+        elif name.startswith("BUILD_"):
             n = int(oparg)
             args = []
             while n > 0:
                 args.append(stack.pop())
                 n-=1
             args.reverse()
-            stack.append(build("list",args))
+            stack.append(build(name[name.find("_")+1:].lower(),args))
 
         elif name == "POP_TOP":
             one = stack.pop()
@@ -204,6 +215,9 @@ class Reverser(object):
             func = name[(name.find("_")+1):].lower()
             one = arg if func in ['global','fast','name']  else stack.pop()
             python.append(build("del",[one]))
+        elif name.startswith("PRINT"):
+            one = [[name[name.find("_")+1:].lower(),stack.pop()]] if name != "PRINT_NEWLINE" else [["newline"]]
+            python.append(build("print",one))
         print name
                 
         return i,python
