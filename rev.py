@@ -56,10 +56,10 @@ def build(name, args):
 
 def reverse(co, lasti=-1):
     r = Reverser(co, lasti)
-    return r.reverse()
+    _,o = r.reverse()
+    return o
     
 def add_expr(new_expr,python, out):
-    print new_expr, out
     if new_expr and len(out) == 1 and isinstance(out[0],tuple) and  out[0][0].startswith("print"):
         if len(python) > 0 and isinstance(python[-1],tuple) and python[-1][0].startswith("print"):
             one = python.pop()
@@ -85,8 +85,8 @@ class Reverser(object):
         while i < self.n:
             if (i in self.linestarts):
                 new_expr = False
-            i,out = self.reverse_one(stack, i, terminator="STOP_CODE")
-            if out == terminator:
+            i,out = self.reverse_one(stack, i, terminator)
+            if isinstance(out,str) and out.startswith(terminator):
                 break
             add_expr(new_expr,python,out)
             if out:
@@ -94,40 +94,14 @@ class Reverser(object):
         #print "end", stack 
         for i in reversed(stack):
             add_expr(True,python,i)
-        return python
+        return i,python
         
     def reverse_one(self,stack, i, terminator):
         python = []
-        extended_arg = 0
-        c = self.code[i]
-        op = ord(c)
         if i == self.lasti: 
             python.append("# Current Line")
-        i+=1
-        name = opname[op]
-        if op >= HAVE_ARGUMENT:
-            oparg = ord(self.code[i]) + ord(self.code[i+1])*256 + extended_arg
-            extended_arg = 0
-            i = i+2
-            arg = None
-            if op == EXTENDED_ARG:
-                extended_arg = oparg*65536L
-            if op in hasconst:
-                arg =  self.co.co_consts[oparg]
-            elif op in hasname:
-                arg = self.co.co_names[oparg]
-            elif op in hasjrel:
-                arg = i + oparg
-            elif op in haslocal:
-                arg = self.co.co_varnames[oparg]
-            elif op in hascompare:
-                arg =  cmp_op[oparg]
-            elif op in hasfree:
-                if self.free is None:
-                    self.free = self.co.co_cellvars + self.co.co_freevars
-                arg =  self.free[oparg]
-            if arg and isinstance(arg,tuple):
-                arg = tuple(['tuple'].append(arg))
+        i,name, arg, oparg = self.instr(i)
+        #print "rev1:",name, terminator
         if name.startswith("INPLACE_"):
             one = stack.pop()
             two = stack.pop()
@@ -170,18 +144,65 @@ class Reverser(object):
         elif name.startswith("LOAD_"):
             stack.append(arg)
                 
-        if name == terminator:
+        if name.startswith(terminator):
             return i,name
         elif name == "RETURN_VALUE" or name == "YIELD_VALUE":
             one = stack.pop()
             python.append(build(name[:name.find("_")].lower(),[one]))
         elif name == "NOP":
             pass
+        elif name == "SETUP_LOOP":
+            end = i + int(oparg) -2
+            start = i
+            body = []
+            cond = True
+            new_expr = True
+            #print "loop", i, end
+            while  i < end:
+                if (i in self.linestarts):
+                    new_expr = False
+                i,out = self.reverse_one(body,i,terminator="JUMP_")
+                #print "l:",cond,body
+                #print "e:", out
+                #print i
+                if isinstance(out,str) and out.startswith("JUMP_"):
+                    n,name, arg, oparg = self.instr(i-3)
+                    #print name, oparg,n
+                    if name.find("IF") > 0 and oparg + n == end:
+                            #print "exit found", body
+                            cond = body[0]
+                            body = []
+                            #print "ijmp",n
+                            i = n+1
+                            if len(body) > 1:
+                                raise Exception, "Fuck"
+                            if name.find("TRUE") > 0:
+                                cond = ('not', cond)
+                    else:
+                        #print "normal, resuming at ",(i-3)
+                        #print "body", body
+                        i, out = self.reverse_one(body,i-3, terminator="STOP_CODE")
+                        #print "new i",i
+                        add_expr(new_expr,body,out)
+                        if out:
+                            new_expr = True
+                else:    
+                    add_expr(new_expr,body,out)
+                    if out:
+                        new_expr = True
+                if i == start:
+                    i = end + 2
+                    break;
+            
+            python.append(build("while",[cond, body]))
+                
         elif name == "JUMP_FORWARD":
             i = i+ int(oparg)
         elif name == "JUMP_ABSOLUTE":
+            #print "hump",oparg
             i = int(oparg)
         elif name.startswith("JUMP"): # must be an if statement
+            start = i
             i+=1
             jmp = i + int(oparg) 
             if jmp <  i:
@@ -190,26 +211,20 @@ class Reverser(object):
             new_expr = True
             cond = stack.pop()
             oldstack = stack[:]
-            print "foo",oldstack
-            
-            while i < jmp:
+            while start < i < jmp :
                 if (i in self.linestarts):
                     new_expr = False
-                i,out = self.reverse_one(stack, i, terminator="")
-                if out == terminator:
-                    break
+                i,out = self.reverse_one(stack, i, terminator="STOP_CODE")
                 add_expr(new_expr,if_branch,out)
                 if out:
                     new_expr = True
             else_branch = []
             new_expr = True
             stack = oldstack
-            while jmp < i:
+            while jmp != i:
                 if (jmp in self.linestarts):
                     new_expr = False
-                jmp,out = self.reverse_one(stack, jmp, terminator="")
-                if out == terminator:
-                    break
+                jmp,out = self.reverse_one(stack, jmp, terminator="STOP_CODE")
                 add_expr(new_expr,else_branch,out)
                 if out:
                     new_expr = True
@@ -277,9 +292,41 @@ class Reverser(object):
                 raise Exception,"fuck"
             one = [[name[name.find("_")+1:].lower(),stack.pop()]] if name != "PRINT_NEWLINE" else [["newline"]]
             python.append(build("print",one))
-        print name
                 
         return i,python
+
+    def instr(self, i):
+        extended_arg = 0
+        c = self.code[i]
+        op = ord(c)
+        arg = None
+        oparg = None
+        name = opname[op]
+        i+=1
+        if op >= HAVE_ARGUMENT:
+            oparg = ord(self.code[i]) + ord(self.code[i+1])*256 + extended_arg
+            extended_arg = 0
+            i = i+2
+            arg = None
+            if op == EXTENDED_ARG:
+                extended_arg = oparg*65536L
+            if op in hasconst:
+                arg =  self.co.co_consts[oparg]
+            elif op in hasname:
+                arg = self.co.co_names[oparg]
+            elif op in hasjrel:
+                arg = i + oparg
+            elif op in haslocal:
+                arg = self.co.co_varnames[oparg]
+            elif op in hascompare:
+                arg =  cmp_op[oparg]
+            elif op in hasfree:
+                if self.free is None:
+                    self.free = self.co.co_cellvars + self.co.co_freevars
+                arg =  self.free[oparg]
+            if arg and isinstance(arg,tuple):
+                arg = tuple(['tuple'].append(arg))
+        return i,name, arg, oparg
 
 
 def reversee_string(code, lasti=-1, varnames=None, names=None,
