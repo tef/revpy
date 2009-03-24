@@ -13,8 +13,8 @@ withcleanup
 
 except/finally/
 build_slice
-from opcode import *
 """
+from opcode import *
 def rev(x=None):
     if x is None:
         x = get_trackback()
@@ -209,6 +209,7 @@ class Reverser(object):
             #print "hump",oparg
             i = int(oparg)
         elif name.startswith("JUMP"): # must be an if statement
+            #print "if"
             start = i
             i+=1
             jmp = i + int(oparg) 
@@ -217,6 +218,7 @@ class Reverser(object):
             if_branch = []
             new_expr = True
             cond = stack.pop()
+            #print "cond", cond
             oldstack = stack[:]
             while start < i < jmp :
                 if (i in self.linestarts):
@@ -225,6 +227,7 @@ class Reverser(object):
                 add_expr(new_expr,if_branch,out)
                 if out:
                     new_expr = True
+            #print "if_branch", if_branch
             else_branch = []
             new_expr = True
             stack = oldstack
@@ -237,10 +240,12 @@ class Reverser(object):
                     new_expr = True
             if jmp != i or len(stack) > 0:
                 raise Exception, "fuck"
+            #print "else_branch", else_branch
             if  name[8:] == "FALSE":
                 if_branch, else_branch = else_branch, if_branch
             if len(else_branch) == 1 and isinstance(else_branch[0], tuple) and else_branch[0][0] == "if":
-                args = [cond, if_branch].append(else_branch[0][1:])
+                args = [cond, if_branch]
+                args.append(else_branch[0][1:])
                 python.append(build("if",args))  
             else:
                 python.append(build("if",[cond,if_branch,else_branch]))  
