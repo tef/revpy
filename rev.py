@@ -227,7 +227,7 @@ class Reverser(object):
                 add_expr(new_expr,if_branch,out)
                 if out:
                     new_expr = True
-            #print "if_branch", if_branch
+            print "if_branch", if_branch
             else_branch = []
             new_expr = True
             stack = oldstack
@@ -240,8 +240,8 @@ class Reverser(object):
                     new_expr = True
             if jmp != i or len(stack) > 0:
                 raise Exception, "fuck"
-            #print "else_branch", else_branch
-            if  name[8:] == "FALSE":
+            print "else_branch", else_branch
+            if  name[8:] == "TRUE":
                 if_branch, else_branch = else_branch, if_branch
             if len(else_branch) == 1 and isinstance(else_branch[0], tuple) and else_branch[0][0] == "if":
                 args = [cond, if_branch]
