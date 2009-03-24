@@ -11,8 +11,7 @@ import* import name import from
 build_class
 withcleanup
 
-except/finally/raise_vargargs
-/ake_closure
+except/finally/
 build_slice
 from opcode import *
 """
@@ -356,7 +355,7 @@ class Reverser(object):
         return i,python
 
     def instr(self, i):
-        print i
+        #print i
         extended_arg = 0
         c = self.code[i]
         op = ord(c)
@@ -397,72 +396,6 @@ operators = {
 def ast_to_code(tree):
     if tree[0] in operators:
         pass
-def reversee_string(code, lasti=-1, varnames=None, names=None,
-                       constants=None):
-    labels = findlabels(code)
-    n = len(code)
-    i = 0
-    while i < n:
-        c = code[i]
-        op = ord(c)
-        if i == lasti: print '-->',
-        else: print '   ',
-        if i in labels: print '>>',
-        else: print '  ',
-        print repr(i).rjust(4),
-        print opname[op].ljust(15),
-        i = i+1
-        if op >= HAVE_ARGUMENT:
-            oparg = ord(code[i]) + ord(code[i+1])*256
-            i = i+2
-            print repr(oparg).rjust(5),
-            if op in hasconst:
-                if constants:
-                    print '(' + repr(constants[oparg]) + ')',
-                else:
-                    print '(%d)'%oparg,
-            elif op in hasname:
-                if names is not None:
-                    print '(' + names[oparg] + ')',
-                else:
-                    print '(%d)'%oparg,
-            elif op in hasjrel:
-                print '(to ' + repr(i + oparg) + ')',
-            elif op in haslocal:
-                if varnames:
-                    print '(' + varnames[oparg] + ')',
-                else:
-                    print '(%d)' % oparg,
-            elif op in hascompare:
-                print '(' + cmp_op[oparg] + ')',
-        print
-
-
-def findlabels(code):
-    """Detect all offsets in a byte code which are jump targets.
-
-    Return the list of offsets.
-
-    """
-    labels = []
-    n = len(code)
-    i = 0
-    while i < n:
-        c = code[i]
-        op = ord(c)
-        i = i+1
-        if op >= HAVE_ARGUMENT:
-            oparg = ord(code[i]) + ord(code[i+1])*256
-            i = i+2
-            label = -1
-            if op in hasjrel:
-                label = i+oparg
-            elif op in hasjabs:
-                label = oparg
-            if label >= 0:
-                if label not in labels:
-                    labels.append(label)
-    return labels
 
 def findlinestarts(code):
     """Find the offsets in a byte code which are start of lines in the source.
